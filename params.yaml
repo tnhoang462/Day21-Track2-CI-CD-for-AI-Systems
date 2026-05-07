@@ -1,11 +1,12 @@
-# Sieu tham so cho mo hinh RandomForestClassifier
-# Bo tham so tot nhat sau 5 thi nghiem o Buoc 1 (accuracy 0.684 tren tap eval).
-# Run 1: n=100, depth=5,  split=2 -> 0.564
-# Run 2: n=50,  depth=3,  split=2 -> 0.558
-# Run 3: n=200, depth=20, split=2 -> 0.684  <- BEST
-# Run 4: n=500, depth=30, split=2 -> 0.680
-# Run 5: n=300, depth=25, split=5 -> 0.668
+# Sieu tham so + lua chon thuat toan
+# Lich su 5 thi nghiem o Buoc 1:
+# Run 1: rf  n=100, depth=5,  split=2 -> 0.564
+# Run 2: rf  n=50,  depth=3,  split=2 -> 0.558
+# Run 3: rf  n=200, depth=20, split=2 -> 0.684  <- BEST RandomForest
+# Run 4: rf  n=500, depth=30, split=2 -> 0.680
+# Run 5: rf  n=300, depth=25, split=5 -> 0.668
+# Sau Bonus 2 voi dataset 5996 mau (Buoc 3) -> rf depth=20 dat 0.748
+model_type: random_forest
 n_estimators: 200
 max_depth: 20
 min_samples_split: 2
-# trigger pipeline (run 1)

@@ -18,7 +18,6 @@ jobs:
 
   # ---------------------------------------------------------------------------
   # JOB 1 - UNIT TEST
-  # Chay unit tests tren du lieu ao (khong can ket noi cloud storage).
   # ---------------------------------------------------------------------------
   test:
     name: Unit Test
@@ -40,8 +39,7 @@ jobs:
 
 
   # ---------------------------------------------------------------------------
-  # JOB 2 - TRAIN
-  # Auth via Workload Identity Federation (no JSON key needed).
+  # JOB 2 - TRAIN (auth via Workload Identity Federation)
   # ---------------------------------------------------------------------------
   train:
     name: Train
@@ -82,7 +80,7 @@ jobs:
           echo "accuracy=$ACC" >> $GITHUB_OUTPUT
           echo "Training accuracy: $ACC"
 
-      - name: Upload model to Cloud Storage
+      - name: Upload model + metrics to Cloud Storage
         env:
           CLOUD_BUCKET: ${{ secrets.CLOUD_BUCKET }}
         run: |
@@ -93,36 +91,89 @@ jobs:
           bucket_name = os.environ["CLOUD_BUCKET"]
           client = storage.Client()
           bucket = client.bucket(bucket_name)
-          blob = bucket.blob("models/latest/model.pkl")
-          blob.upload_from_filename("models/model.pkl")
-          print(f"Uploaded models/model.pkl -> gs://{bucket_name}/models/latest/model.pkl")
+          for src, dst in [
+              ("models/model.pkl", "models/latest/model.pkl"),
+              ("outputs/metrics.json", "models/latest/metrics.json"),
+          ]:
+              bucket.blob(dst).upload_from_filename(src)
+              print(f"Uploaded {src} -> gs://{bucket_name}/{dst}")
           EOF
 
-      - name: Save metrics as artifact
+      - name: Save artifacts (metrics + report)
         uses: actions/upload-artifact@v4
         with:
-          name: metrics
-          path: outputs/metrics.json
+          name: training-outputs
+          path: |
+            outputs/metrics.json
+            outputs/report.txt
 
 
   # ---------------------------------------------------------------------------
-  # JOB 3 - EVAL GATE: accuracy >= 0.70
+  # JOB 3 - EVAL GATE: accuracy >= 0.70 + Bonus 4 rollback check
   # ---------------------------------------------------------------------------
   eval:
     name: Eval
     needs: train
     runs-on: ubuntu-latest
     steps:
-      - name: Check eval gate
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install minimal deps
+        run: pip install google-cloud-storage
+
+      - id: gcp_auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+
+      - name: Eval gate + rollback check (Bonus 4)
         env:
-          ACC: ${{ needs.train.outputs.accuracy }}
+          NEW_ACC: ${{ needs.train.outputs.accuracy }}
+          CLOUD_BUCKET: ${{ secrets.CLOUD_BUCKET }}
         run: |
           python - <<'EOF'
-          import os
-          acc = float(os.environ["ACC"])
-          if acc < 0.70:
-              raise SystemExit(f"FAILED: accuracy {acc:.4f} < 0.70. Huy deploy.")
-          print(f"PASSED: accuracy {acc:.4f} >= 0.70. Dang trien khai model.")
+          import json, os, sys
+          from google.cloud import storage
+
+          new_acc = float(os.environ["NEW_ACC"])
+          bucket_name = os.environ["CLOUD_BUCKET"]
+
+          # Hard gate: accuracy phai >= 0.70
+          if new_acc < 0.70:
+              print(f"FAILED: accuracy {new_acc:.4f} < 0.70. Huy deploy.")
+              sys.exit(1)
+
+          # Bonus 4: so sanh voi model dang chay (neu co prev metrics tren GCS)
+          client = storage.Client()
+          bucket = client.bucket(bucket_name)
+          blob = bucket.blob("models/current/metrics.json")
+          if blob.exists():
+              prev = json.loads(blob.download_as_text())
+              prev_acc = float(prev["accuracy"])
+              print(f"Comparing: new={new_acc:.4f} vs current_deployed={prev_acc:.4f}")
+              if new_acc < prev_acc:
+                  print(
+                      f"FAILED ROLLBACK: new accuracy {new_acc:.4f} < "
+                      f"current deployed {prev_acc:.4f}. Giu nguyen model cu."
+                  )
+                  sys.exit(1)
+              print(f"PASSED rollback check (+{(new_acc-prev_acc)*100:.2f}%).")
+          else:
+              print("No previously-deployed metrics found (first deploy).")
+
+          print(f"PASSED eval gate: accuracy {new_acc:.4f} >= 0.70.")
+
+          # Promote model latest -> current (this is what's actually serving)
+          for fname in ("model.pkl", "metrics.json"):
+              src_blob = bucket.blob(f"models/latest/{fname}")
+              dst_blob = bucket.blob(f"models/current/{fname}")
+              dst_blob.rewrite(src_blob)
+          print("Promoted models/latest/* -> models/current/*")
           EOF
 
 
