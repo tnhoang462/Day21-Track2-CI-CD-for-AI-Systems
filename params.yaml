@@ -1,5 +1,10 @@
 # Sieu tham so cho mo hinh RandomForestClassifier
-# Thay doi cac gia tri nay giua cac lan chay de thi nghiem (Buoc 1)
-n_estimators: 100
-max_depth: 5
+# Bo tham so tot nhat sau 5 thi nghiem o Buoc 1 (accuracy 0.684 tren tap eval).
+# Run 1: n=100, depth=5,  split=2 -> 0.564
+# Run 2: n=50,  depth=3,  split=2 -> 0.558
+# Run 3: n=200, depth=20, split=2 -> 0.684  <- BEST
+# Run 4: n=500, depth=30, split=2 -> 0.680
+# Run 5: n=300, depth=25, split=5 -> 0.668
+n_estimators: 200
+max_depth: 20
 min_samples_split: 2
