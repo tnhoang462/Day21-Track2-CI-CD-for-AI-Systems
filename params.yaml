@@ -6,7 +6,7 @@
 # Run 4: rf  n=500, depth=30, split=2 -> 0.680
 # Run 5: rf  n=300, depth=25, split=5 -> 0.668
 # Sau Bonus 2 voi dataset 5996 mau (Buoc 3) -> rf depth=20 dat 0.748
-model_type: random_forest
+model_type: random_forest  # bonus 1: dagshub tracking
 n_estimators: 200
 max_depth: 20
 min_samples_split: 2
