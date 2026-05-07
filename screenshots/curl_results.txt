@@ -1,0 +1,8 @@
+=== /health ===
+{"status":"ok"}
+
+=== /predict (red wine) ===
+{"prediction":0,"label":"thap"}
+
+=== /predict (white wine) ===
+{"prediction":2,"label":"cao"}
